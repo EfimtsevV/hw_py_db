@@ -2,6 +2,14 @@ import psycopg2
 
 def create_db(conn):
     with conn.cursor() as cursor:
+        # Удаляем таблицы, если они уже существуют
+        cursor.execute("""
+        DROP TABLE IF EXISTS client_phones CASCADE;
+        DROP TABLE IF EXISTS phones CASCADE;
+        DROP TABLE IF EXISTS clients CASCADE;
+        """)
+        
+        # Создаем таблицы заново
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS clients (
             id SERIAL PRIMARY KEY,
@@ -9,10 +17,12 @@ def create_db(conn):
             last_name VARCHAR(100) NOT NULL,
             email VARCHAR(100) UNIQUE
         );
+        
         CREATE TABLE IF NOT EXISTS phones (
             id SERIAL PRIMARY KEY,
             phone VARCHAR(11) UNIQUE
         );
+        
         CREATE TABLE IF NOT EXISTS client_phones (
             id SERIAL PRIMARY KEY,
             client_id INTEGER REFERENCES clients(id) ON DELETE CASCADE,
@@ -20,6 +30,7 @@ def create_db(conn):
         );
         """)
         conn.commit()
+        
 def add_client(conn, first_name, last_name, email, phones=None):
     with conn.cursor() as cursor:
         cursor.execute("""
@@ -119,6 +130,7 @@ def find_client(conn, first_name=None, last_name=None, email=None, phone=None):
         results = cursor.fetchall()
         for result in results:
             print(result)
+
             
 if __name__ == "__main__":
     with psycopg2.connect(database="hw_pydb", user="postgres", password="12345") as conn:
