@@ -1,6 +1,5 @@
 import psycopg2
 
-
 def create_db(conn):
     with conn.cursor() as cursor:
         cursor.execute("""
@@ -25,13 +24,22 @@ def add_client(conn, first_name, last_name, email, phones=None):
     with conn.cursor() as cursor:
         cursor.execute("""
         INSERT INTO clients (first_name, last_name, email)
-        VALUES (%s, %s, %s) RETURNING id;
+        VALUES (%s, %s, %s) ON CONFLICT (email) DO NOTHING RETURNING id;
         """, (first_name, last_name, email))
-        client_id = cursor.fetchone()[0]
+        
+        client_id = cursor.fetchone()
+        if client_id:
+            client_id = client_id[0]
+        else:
+            cursor.execute("SELECT id FROM clients WHERE email = %s;", (email,))
+            client_id = cursor.fetchone()[0]
+
         if phones:
             for phone in phones:
                 add_phone(conn, client_id, phone)
+        
         conn.commit()
+
         
 def add_phone(conn, client_id, phone):
     with conn.cursor() as cursor:
@@ -53,17 +61,23 @@ def add_phone(conn, client_id, phone):
         
 def change_client(conn, client_id, first_name=None, last_name=None, email=None, phones=None):
     with conn.cursor() as cursor:
+        cursor.execute("SELECT id FROM clients WHERE id = %s;", (client_id,))
+        if not cursor.fetchone():
+            print(f"Client with id {client_id} does not exist.")
+            return  
         if first_name:
             cursor.execute("UPDATE clients SET first_name = %s WHERE id = %s;", (first_name, client_id))
         if last_name:
             cursor.execute("UPDATE clients SET last_name = %s WHERE id = %s;", (last_name, client_id))
         if email:
             cursor.execute("UPDATE clients SET email = %s WHERE id = %s;", (email, client_id))
+
         if phones is not None:
             cursor.execute("DELETE FROM client_phones WHERE client_id = %s;", (client_id,))
             for phone in phones:
                 add_phone(conn, client_id, phone)
         conn.commit()
+
         
 def delete_phone(conn, client_id, phone):
     with conn.cursor() as cursor:
@@ -77,10 +91,10 @@ def delete_phone(conn, client_id, phone):
             DELETE FROM client_phones WHERE client_id = %s AND phone_id = %s;
             """, (client_id, phone_id))
             cursor.execute("""
-            DELETE FROM phones WHERE id = %s 
-            );
-            """, (phone_id, phone_id))
+            DELETE FROM phones WHERE id = %s;
+            """, (phone_id,))
         conn.commit()
+
 
 def delete_client(conn, client_id):
     with conn.cursor() as cursor:
@@ -90,14 +104,16 @@ def delete_client(conn, client_id):
 def find_client(conn, first_name=None, last_name=None, email=None, phone=None):
     with conn.cursor() as cursor:
         find_query = """
-        SELECT c.id, c.first_name, c.last_name, c.email, p.phone
+        SELECT c.id, c.first_name, c.last_name, c.email, 
+               STRING_AGG(p.phone, ', ') AS phones
         FROM clients c
         LEFT JOIN client_phones cp ON c.id = cp.client_id
         LEFT JOIN phones p ON cp.phone_id = p.id
         WHERE (%s IS NULL OR c.first_name = %s)
           AND (%s IS NULL OR c.last_name = %s)
           AND (%s IS NULL OR c.email = %s)
-          AND (%s IS NULL OR p.phone = %s);
+          AND (%s IS NULL OR p.phone = %s)
+        GROUP BY c.id, c.first_name, c.last_name, c.email;
         """
         cursor.execute(find_query, (first_name, first_name, last_name, last_name, email, email, phone, phone))
         results = cursor.fetchall()
