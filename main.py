@@ -2,14 +2,14 @@ import psycopg2
 
 def create_db(conn):
     with conn.cursor() as cursor:
-        # Удаляем таблицы, если они уже существуют
+        
         cursor.execute("""
         DROP TABLE IF EXISTS client_phones CASCADE;
         DROP TABLE IF EXISTS phones CASCADE;
         DROP TABLE IF EXISTS clients CASCADE;
         """)
         
-        # Создаем таблицы заново
+
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS clients (
             id SERIAL PRIMARY KEY,
